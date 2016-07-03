@@ -27,11 +27,14 @@ import com.intellij.patterns.ElementPatternCondition
 import com.intellij.patterns.InitialPatternCondition
 import com.intellij.psi.PsiElement
 import com.intellij.util.ProcessingContext
+import com.squareup.sqldelight.SqliteLexer
 import com.squareup.sqldelight.SqliteParser
 import com.squareup.sqldelight.intellij.SqlDelightManager
 import com.squareup.sqldelight.resolution.ResolutionError
 import com.squareup.sqldelight.resolution.Resolver
 import com.squareup.sqldelight.validation.SqlDelightValidator
+import org.antlr.v4.runtime.ANTLRInputStream
+import org.antlr.v4.runtime.CommonTokenStream
 
 private val DUMMY_IDENTIFIER = "sql_delight_dummy_identifier"
 
@@ -52,13 +55,11 @@ class SqlDelightCompletionContributor : CompletionContributor() {
 private class SqlDelightCompletionProvider : CompletionProvider<CompletionParameters>() {
   override fun addCompletions(parameters: CompletionParameters, context: ProcessingContext?,
       result: CompletionResultSet) {
-    val manager = SqlDelightManager.getInstance(parameters.position) ?: return
-    val file = parameters.position.containingFile as SqliteFile
-    file.dirty = true
-    file.parseThen(
-        operation = getAvailableValues(parameters, result, manager),
-        onError = { parsed, errors -> getAvailableValues(parameters, result, manager).invoke(parsed) }
-    )
+    val manager = SqlDelightManager.getInstance(parameters.originalFile) ?: return
+    if (parameters.originalFile !is SqliteFile) return
+    val lexer = SqliteLexer(ANTLRInputStream(parameters.position.containingFile.text))
+    val parser = SqliteParser(CommonTokenStream(lexer))
+    getAvailableValues(parameters, result, manager, parser.parse())
     // No reason to do any other completion for SQLDelight files. Might save some time.
     result.stopHere()
   }
@@ -66,8 +67,9 @@ private class SqlDelightCompletionProvider : CompletionProvider<CompletionParame
   private fun getAvailableValues(
       parameters: CompletionParameters,
       result: CompletionResultSet,
-      manager: SqlDelightManager
-  ) = { parsed: SqliteParser.ParseContext ->
+      manager: SqlDelightManager,
+      parsed: SqliteParser.ParseContext
+  ) {
     result.addAllElements(parsed.sql_stmt_list().sql_stmt()
         .filter { it.start.startIndex < parameters.offset && it.stop.stopIndex > parameters.offset }
         .flatMap {

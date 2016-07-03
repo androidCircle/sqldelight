@@ -15,6 +15,7 @@
  */
 package com.squareup.sqldelight.intellij.util
 
+import com.intellij.psi.PsiDirectory
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.tree.IElementType
@@ -52,3 +53,7 @@ internal fun PsiElement.childrenForRule(rule: Int) = children.filter {
         else -> false
       }
     }
+
+fun PsiDirectory.getOrCreateSubdirectory(name: String) = findSubdirectory(name) ?: createSubdirectory(name)
+
+fun PsiDirectory.getOrCreateFile(name: String) = findFile(name) ?: createFile(name)
